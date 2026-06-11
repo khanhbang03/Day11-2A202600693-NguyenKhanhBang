@@ -84,13 +84,42 @@ class ConfidenceRouter:
         #      action="escalate", priority="high",
         #      requires_human=True, reason="Low confidence — escalating"
 
+        confidence = max(0.0, min(1.0, confidence))
+
+        if action_type in HIGH_RISK_ACTIONS:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High-risk action: {action_type}",
+                priority="high",
+                requires_human=True,
+            )
+
+        if confidence >= self.HIGH_THRESHOLD:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence",
+                priority="low",
+                requires_human=False,
+            )
+
+        if confidence >= self.MEDIUM_THRESHOLD:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence - needs review",
+                priority="normal",
+                requires_human=True,
+            )
+
         return RoutingDecision(
-            action="auto_send",
+            action="escalate",
             confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+            reason="Low confidence - escalating",
+            priority="high",
+            requires_human=True,
+        )
 
 
 # ============================================================
@@ -109,27 +138,27 @@ class ConfidenceRouter:
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "High-value transfer approval",
+        "trigger": "A transfer exceeds the customer's normal limit, uses a new beneficiary, or matches fraud-risk signals.",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "Customer verification status, transfer amount, beneficiary history, device/IP risk, recent account activity, and model rationale.",
+        "example": "A customer asks the chatbot to transfer 500 million VND to a newly added account from an unfamiliar device.",
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Identity recovery exception",
+        "trigger": "The customer cannot pass normal authentication but requests account recovery, password reset, or personal-info changes.",
+        "hitl_model": "human-as-tiebreaker",
+        "context_needed": "Failed and passed authentication checks, KYC profile, prior support tickets, account risk flags, and the exact requested change.",
+        "example": "A customer lost their phone and asks to change the registered phone number after failing OTP verification.",
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Complaint and regulatory review",
+        "trigger": "The conversation includes a formal complaint, suspected mis-selling, legal threat, or request for regulatory evidence.",
+        "hitl_model": "human-on-the-loop",
+        "context_needed": "Conversation transcript, product terms shown to the customer, transaction records, disclosures, timestamps, and suggested response.",
+        "example": "A borrower claims a loan fee was hidden and asks for a written explanation suitable for a regulator.",
     },
 ]
 

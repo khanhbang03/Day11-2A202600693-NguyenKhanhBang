@@ -5,6 +5,10 @@ Lab 11 — Part 2A: Input Guardrails
   TODO 5: Input Guardrail Plugin (ADK)
 """
 import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from google.genai import types
 from google.adk.plugins import base_plugin
@@ -38,9 +42,17 @@ def detect_injection(user_input: str) -> bool:
         True if injection detected, False otherwise
     """
     INJECTION_PATTERNS = [
-        # TODO: Add at least 5 regex patterns
-        # Example:
-        # r"ignore (all )?(previous|above) instructions",
+        r"\b(ignore|forget|disregard|override)\b.*\b(previous|prior|above|system|developer)\b.*\binstructions?\b",
+        r"\byou are now\b",
+        r"\bsystem prompt\b|\bdeveloper message\b|\bhidden instructions?\b",
+        r"\breveal\b.*\b(instructions?|prompt|system|secret|password|api key)\b",
+        r"\b(show|print|output|dump|repeat)\b.*\b(config|configuration|instructions?|prompt|secrets?)\b",
+        r"\bpretend you are\b|\brole[- ]?play as\b",
+        r"\bact as (a |an )?(unrestricted|uncensored|jailbroken)\b",
+        r"\bDAN\b|\bdo anything now\b",
+        r"\bbase64\b|\brot13\b|\bencode\b|\bdecode\b",
+        r"\bbỏ qua\b.*\b(hướng dẫn|chỉ dẫn)\b",
+        r"\btiết lộ\b.*\b(mật khẩu|system prompt|api key|bí mật)\b",
     ]
 
     for pattern in INJECTION_PATTERNS:
@@ -70,12 +82,13 @@ def topic_filter(user_input: str) -> bool:
     """
     input_lower = user_input.lower()
 
-    # TODO: Implement logic:
-    # 1. If input contains any blocked topic -> return True
-    # 2. If input doesn't contain any allowed topic -> return True
-    # 3. Otherwise -> return False (allow)
+    if any(topic in input_lower for topic in BLOCKED_TOPICS):
+        return True
 
-    pass  # Replace with your implementation
+    if not any(topic in input_lower for topic in ALLOWED_TOPICS):
+        return True
+
+    return False
 
 
 # ============================================================
@@ -135,7 +148,19 @@ class InputGuardrailPlugin(base_plugin.BasePlugin):
         #    - If True: increment blocked_count, return self._block_response("...")
         # 3. If both are False: return None (let message through)
 
-        pass  # Replace with your implementation
+        if detect_injection(text):
+            self.blocked_count += 1
+            return self._block_response(
+                "I cannot process that request. I'm here to help with banking questions only."
+            )
+
+        if topic_filter(text):
+            self.blocked_count += 1
+            return self._block_response(
+                "I'm a VinBank assistant and can only help with banking-related questions."
+            )
+
+        return None
 
 
 # ============================================================

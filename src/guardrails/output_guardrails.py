@@ -5,7 +5,11 @@ Lab 11 — Part 2B: Output Guardrails
   TODO 8: Output Guardrail Plugin (ADK)
 """
 import re
+import sys
+from pathlib import Path
 import textwrap
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from google.genai import types
 from google.adk.agents import llm_agent
@@ -41,12 +45,12 @@ def content_filter(response: str) -> dict:
 
     # PII patterns to check
     PII_PATTERNS = {
-        # TODO: Add regex patterns for:
-        # - VN phone number: r"0\d{9,10}"
-        # - Email: r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}"
-        # - National ID (CMND/CCCD): r"\b\d{9}\b|\b\d{12}\b"
-        # - API key pattern: r"sk-[a-zA-Z0-9-]+"
-        # - Password pattern: r"password\s*[:=]\s*\S+"
+        "VN phone number": r"\b0\d{9,10}\b",
+        "Email": r"\b[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}\b",
+        "National ID": r"\b(?:\d{9}|\d{12})\b",
+        "API key": r"\bsk-[a-zA-Z0-9-]+\b",
+        "Password": r"\bpassword\s*(?:is|:|=)\s*['\"]?\S+",
+        "Database host": r"\b[a-zA-Z0-9.-]+\.internal(?::\d+)?\b",
     }
 
     for name, pattern in PII_PATTERNS.items():
@@ -97,7 +101,11 @@ If UNSAFE, add a brief reason on the next line.
 #     instruction=SAFETY_JUDGE_INSTRUCTION,
 # )
 
-safety_judge_agent = None  # TODO: Replace with implementation
+safety_judge_agent = llm_agent.LlmAgent(
+    model="gemini-2.0-flash",
+    name="safety_judge",
+    instruction=SAFETY_JUDGE_INSTRUCTION,
+)
 judge_runner = None
 
 
@@ -181,7 +189,32 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         #    - Increment self.blocked_count
         # 3. Return llm_response (possibly modified)
 
-        return llm_response  # TODO: modify if needed
+        filter_result = content_filter(response_text)
+        text_to_send = response_text
+
+        if not filter_result["safe"]:
+            self.redacted_count += 1
+            text_to_send = filter_result["redacted"]
+            llm_response.content = types.Content(
+                role="model",
+                parts=[types.Part.from_text(text=text_to_send)],
+            )
+
+        if self.use_llm_judge:
+            judge_result = await llm_safety_check(text_to_send)
+            if not judge_result["safe"]:
+                self.blocked_count += 1
+                llm_response.content = types.Content(
+                    role="model",
+                    parts=[types.Part.from_text(
+                        text=(
+                            "I cannot provide that response. I can help with safe, "
+                            "banking-related questions about VinBank services."
+                        )
+                    )],
+                )
+
+        return llm_response
 
 
 # ============================================================

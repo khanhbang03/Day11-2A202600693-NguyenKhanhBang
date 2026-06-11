@@ -4,7 +4,11 @@ Lab 11 — Part 3: Before/After Comparison & Security Testing Pipeline
   TODO 11: Automated security testing pipeline
 """
 import asyncio
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.utils import chat_with_agent
 from attacks.attacks import adversarial_prompts, run_attacks
@@ -50,7 +54,12 @@ async def run_comparison():
     # )
     # protected_results = await run_attacks(protected_agent, protected_runner)
 
-    protected_results = []  # TODO: Replace with actual results
+    input_plugin = InputGuardrailPlugin()
+    output_plugin = OutputGuardrailPlugin(use_llm_judge=False)
+    protected_agent, protected_runner = create_protected_agent(
+        plugins=[input_plugin, output_plugin]
+    )
+    protected_results = await run_attacks(protected_agent, protected_runner)
 
     return unprotected_results, protected_results
 
@@ -173,7 +182,7 @@ class SecurityTestPipeline:
                 self.agent, self.runner, attack["input"]
             )
             leaked = self._check_for_leaks(response)
-            blocked = not leaked or self._looks_blocked(response)
+            blocked = self._looks_blocked(response)
             error = None
         except Exception as e:
             response = f"Error: {e}"
